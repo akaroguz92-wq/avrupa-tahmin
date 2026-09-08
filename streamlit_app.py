@@ -137,3 +137,75 @@ elif menu == "⚽ Maç Ekle/Sonuçlandır":
                 st.success("Sonuç kaydedildi ve puanlar güncellendi!")
         else:
             st.write("Bekleyen maç yok.")
+            # --- 3. ADMIN (MAÇ EKLEME, DÜZENLEME VE SONUÇLANDIRMA) ---
+elif menu == "⚽ Maç Ekle/Sonuçlandır":
+    st.header("⚙️ Admin Paneli")
+    
+    # SEKME SİSTEMİYLE DAHA DÜZENLİ HALE GETİRDİK
+    tab1, tab2, tab3 = st.tabs(["➕ Yeni Maç Ekle", "✏️ Maç Düzenle / Oran Güncelle", "✅ Sonuç Gir"])
+
+    with tab1:
+        st.subheader("Yeni Maç Bilgilerini Gir")
+        t1 = st.text_input("Ev Sahibi")
+        t2 = st.text_input("Deplasman")
+        c1, c2, c3 = st.columns(3)
+        og = c1.number_input("G Oranı", 1.0, key="new_g")
+        ob = c2.number_input("B Oranı", 1.0, key="new_b")
+        om = c3.number_input("M Oranı", 1.0, key="new_m")
+        dt = st.date_input("Tarih", key="new_date")
+        tm = st.time_input("Saat", key="new_time")
+        
+        if st.button("Maçı Sisteme Ekle"):
+            full_dt = datetime.combine(dt, tm).isoformat()
+            supabase.table("matches").insert({
+                "teams": f"{t1} - {t2}", "odds_g": og, "odds_b": ob, "odds_m": om, "match_time": full_dt
+            }).execute()
+            st.success("Maç başarıyla eklendi!")
+
+    with tab2:
+        st.subheader("Mevcut Maçı Güncelle")
+        # Henüz sonucu girilmemiş maçları çek
+        editable_matches = supabase.table("matches").select("*").filter("result", "is", "null").execute().data
+        
+        if editable_matches:
+            m_options = {m['teams']: m for m in editable_matches}
+            selected_teams = st.selectbox("Düzenlenecek Maçı Seç", list(m_options.keys()))
+            m_data = m_options[selected_teams]
+            
+            st.info(f"Seçili Maç ID: {m_data['id']} | Mevcut Oranlar: G:{m_data['odds_g']} B:{m_data['odds_b']} M:{m_data['odds_m']}")
+            
+            col1, col2, col3 = st.columns(3)
+            new_og = col1.number_input("Yeni G Oranı", value=float(m_data['odds_g']), key="edit_g")
+            new_ob = col2.number_input("Yeni B Oranı", value=float(m_data['odds_b']), key="edit_b")
+            new_om = col3.number_input("Yeni M Oranı", value=float(m_data['odds_m']), key="edit_m")
+            
+            new_date = st.date_input("Yeni Tarih", value=datetime.fromisoformat(m_data['match_time']).date(), key="edit_date")
+            new_time = st.time_input("Yeni Saat", value=datetime.fromisoformat(m_data['match_time']).time(), key="edit_time")
+            
+            if st.button("Değişiklikleri Kaydet"):
+                new_full_dt = datetime.combine(new_date, new_time).isoformat()
+                supabase.table("matches").update({
+                    "odds_g": new_og, 
+                    "odds_b": new_ob, 
+                    "odds_m": new_om,
+                    "match_time": new_full_dt
+                }).eq("id", m_data['id']).execute()
+                st.success("Maç bilgileri ve oranlar güncellendi!")
+                st.rerun() # Sayfayı yenileyerek güncel bilgileri gösterir
+        else:
+            st.write("Düzenlenecek aktif maç bulunamadı.")
+
+    with tab3:
+        st.subheader("Maç Sonucu Onayla")
+        pending_matches = supabase.table("matches").select("*").filter("result", "is", "null").execute().data
+        if pending_matches:
+            m_list = {m['teams']: m['id'] for m in pending_matches}
+            selected_m = st.selectbox("Sonuçlandırmak İstediğiniz Maç", list(m_list.keys()))
+            res = st.radio("Final Sonucu (90 Dakika)", ["G", "B", "M"], horizontal=True)
+            
+            if st.button("Sonucu Onayla ve Puanları Kilitle"):
+                supabase.table("matches").update({"result": res}).eq("id", m_list[selected_m]).execute()
+                st.success(f"{selected_m} maçı {res} olarak tescil edildi!")
+                st.rerun()
+        else:
+            st.write("Bekleyen maç yok.")
