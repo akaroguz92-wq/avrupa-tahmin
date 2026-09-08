@@ -103,6 +103,10 @@ elif menu == "📝 Tahmin Yap":
                 st.success(f"Tahmin kaydedildi: {choice}")
         else:
             st.error("🚫 Maça 30 dakikadan az kaldığı için tahmin yapılamaz.")
+            
+# --- 3. ADMIN (MAÇ EKLEME, DÜZENLEME VE SONUÇLANDIRMA) ---
+elif menu == "⚽ Maç Ekle/Sonuçlandır":
+    st.header("⚙️ Admin Paneli")
     
     # SEKME SİSTEMİYLE DAHA DÜZENLİ HALE GETİRDİK
     tab1, tab2, tab3 = st.tabs(["➕ Yeni Maç Ekle", "✏️ Maç Düzenle / Oran Güncelle", "✅ Sonuç Gir"])
