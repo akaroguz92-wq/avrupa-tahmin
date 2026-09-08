@@ -103,43 +103,6 @@ elif menu == "📝 Tahmin Yap":
                 st.success(f"Tahmin kaydedildi: {choice}")
         else:
             st.error("🚫 Maça 30 dakikadan az kaldığı için tahmin yapılamaz.")
-
-# --- 3. ADMIN (MAÇ EKLEME VE SONUÇLANDIRMA) ---
-elif menu == "⚽ Maç Ekle/Sonuçlandır":
-    st.header("⚙️ Admin Paneli")
-    
-    with st.expander("➕ Yeni Maç Ekle"):
-        t1 = st.text_input("Ev Sahibi")
-        t2 = st.text_input("Deplasman")
-        c1, c2, c3 = st.columns(3)
-        og = c1.number_input("G Oranı", 1.0)
-        ob = c2.number_input("B Oranı", 1.0)
-        om = c3.number_input("M Oranı", 1.0)
-        dt = st.date_input("Tarih")
-        tm = st.time_input("Saat")
-        
-        if st.button("Maçı Sisteme Ekle"):
-            full_dt = datetime.combine(dt, tm).isoformat()
-            supabase.table("matches").insert({
-                "teams": f"{t1} - {t2}", "odds_g": og, "odds_b": ob, "odds_m": om, "match_time": full_dt
-            }).execute()
-            st.success("Maç başarıyla eklendi!")
-
-    with st.expander("✅ Maç Sonucu Gir"):
-        pending_matches = supabase.table("matches").select("*").filter("result", "is", "null").execute().data
-        if pending_matches:
-            m_list = {m['teams']: m['id'] for m in pending_matches}
-            selected_m = st.selectbox("Maç Seç", list(m_list.keys()))
-            res = st.radio("Sonuç (90 Dakika)", ["G", "B", "M"], horizontal=True)
-            
-            if st.button("Sonucu Onayla"):
-                supabase.table("matches").update({"result": res}).eq("id", m_list[selected_m]).execute()
-                st.success("Sonuç kaydedildi ve puanlar güncellendi!")
-        else:
-            st.write("Bekleyen maç yok.")
-            # --- 3. ADMIN (MAÇ EKLEME, DÜZENLEME VE SONUÇLANDIRMA) ---
-elif menu == "⚽ Maç Ekle/Sonuçlandır":
-    st.header("⚙️ Admin Paneli")
     
     # SEKME SİSTEMİYLE DAHA DÜZENLİ HALE GETİRDİK
     tab1, tab2, tab3 = st.tabs(["➕ Yeni Maç Ekle", "✏️ Maç Düzenle / Oran Güncelle", "✅ Sonuç Gir"])
