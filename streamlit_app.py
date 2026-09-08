@@ -31,7 +31,7 @@ if menu == "📊 Puan Durumu":
     preds = supabase.table("predictions").select("*").execute().data
     
     stats = []
-    for player in ["Ahmet", "Mehmet", "Ali", "Veli"]:
+    for player in ["Oğuz", "Recep", "Semih", "İbo"]:
         user_preds = [p for p in preds if p['user_name'] == player]
         total_p = 0
         correct_count = 0
