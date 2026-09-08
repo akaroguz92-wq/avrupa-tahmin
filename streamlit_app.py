@@ -21,7 +21,7 @@ def calculate_points(prediction, result, odds):
 # --- ARAYÜZ ---
 st.sidebar.title("🏆 Avrupa Yarışması")
 menu = st.sidebar.radio("Menü", ["📊 Puan Durumu", "📝 Tahmin Yap", "⚽ Maç Ekle/Sonuçlandır"])
-user = st.sidebar.selectbox("Oyuncu Seçiniz", ["Ahmet", "Mehmet", "Ali", "Veli"])
+user = st.sidebar.selectbox("Oyuncu Seçiniz", ["Oğuz", "Recep", "Semih", "İbo"])
 
 # --- 1. PUAN DURUMU ---
 if menu == "📊 Puan Durumu":
