@@ -69,39 +69,76 @@ if menu == "📊 Puan Durumu":
     st.table(df)
     st.info("💡 Puanlar her maçtan alınan değerlerin toplanmasıyla ilerler.")
 
-# --- 2. TAHMİN YAP ---
-elif menu == "📝 Tahmin Yap":
-    st.header("📝 Maç Tahminlerini Gir")
-    # Henüz sonucu girilmemiş maçları getir
-    matches = supabase.table("matches").select("*").filter("result", "is", "null").execute().data
+# --- 2. TAHMİN YAP --- 
+elif menu == "📝 Tahmin Yap": 
+    st.header("📝 Maç Tahminlerini Gir") 
     
-    if not matches:
-        st.write("Şu an aktif maç bulunmamaktadır.")
+    # Henüz sonucu girilmemiş maçları getir 
+    matches = supabase.table("matches").select("*").filter("result", "is", "null").execute().data 
     
-    for m in matches:
-        m_time = datetime.fromisoformat(m['match_time'])
-        deadline = m_time - timedelta(minutes=30)
+    if not matches: 
+        st.write("Şu an aktif maç bulunmamaktadır.") 
+    
+    for m in matches: 
+        m_time = datetime.fromisoformat(m['match_time']) 
+        deadline = m_time - timedelta(minutes=30) 
         
-        st.subheader(f"{m['teams']}")
-        st.write(f"Oranlar: G: {m['odds_g']} | B: {m['odds_b']} | M: {m['odds_m']}")
-        st.write(f"📅 Maç Zamanı: {m_time.strftime('%d.%m.%Y %H:%M')}")
+        st.subheader(f"{m['teams']}") 
+        st.write(f"Oranlar: G: {m['odds_g']} | B: {m['odds_b']} | M: {m['odds_m']}") 
+        st.write(f"📅 Maç Zamanı: {m_time.strftime('%d.%m.%Y %H:%M')}") 
         
-        if datetime.now() < deadline:
-            # Mevcut tahmini kontrol et
-            existing = supabase.table("predictions").select("prediction").match({"match_id": m['id'], "user_name": user}).execute().data
-            default_index = 0
-            if existing:
-                map_idx = {"G": 0, "B": 1, "M": 2}
-                default_index = map_idx.get(existing[0]['prediction'], 0)
+        if datetime.now() < deadline: 
             
-            choice = st.radio(f"Tahminin ({m['teams']})", ["G", "B", "M"], key=m['id'], horizontal=True, index=default_index)
+            # Mevcut tahmini kontrol et 
+            existing = (
+                supabase
+                .table("predictions")
+                .select("prediction")
+                .match({
+                    "match_id": m['id'],
+                    "user_name": user
+                })
+                .execute()
+                .data
+            )
+
+            default_index = 0 
+            if existing: 
+                map_idx = {"G": 0, "B": 1, "M": 2} 
+                default_index = map_idx.get(existing[0]['prediction'], 0) 
             
-            if st.button(f"Kaydet: {m['teams']}"):
-                supabase.table("predictions").upsert({
-                    "match_id": m['id'], "user_name": user, "prediction": choice
-                }).execute()
-                st.success(f"Tahmin kaydedildi: {choice}")
-        else:
+            choice = st.radio(
+                f"Tahminin ({m['teams']})",
+                ["G", "B", "M"],
+                key=m['id'],
+                horizontal=True,
+                index=default_index
+            ) 
+            
+            if st.button(f"Kaydet: {m['teams']}"): 
+                try:
+                    # Mevcut kayıt varsa güncelle, yoksa yeni kayıt ekle
+                    if existing:
+                        supabase.table("predictions").update({
+                            "prediction": choice
+                        }).match({
+                            "match_id": m['id'],
+                            "user_name": user
+                        }).execute()
+                    else:
+                        supabase.table("predictions").insert({
+                            "match_id": m['id'],
+                            "user_name": user,
+                            "prediction": choice
+                        }).execute()
+
+                    st.success(f"Tahmin kaydedildi: {choice}")
+
+                except Exception as e:
+                    st.error("Tahmin kaydedilirken hata oluştu.")
+                    st.exception(e)
+
+        else: 
             st.error("🚫 Maça 30 dakikadan az kaldığı için tahmin yapılamaz.")
             
 # --- 3. ADMIN (MAÇ EKLEME, DÜZENLEME VE SONUÇLANDIRMA) ---
