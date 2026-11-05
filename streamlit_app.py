@@ -1,3 +1,4 @@
+import hmac
 import streamlit as st
 from supabase import create_client
 import pandas as pd
@@ -144,7 +145,27 @@ elif menu == "📝 Tahmin Yap":
 # --- 3. ADMIN (MAÇ EKLEME, DÜZENLEME VE SONUÇLANDIRMA) ---
 elif menu == "⚽ Maç Ekle/Sonuçlandır":
     st.header("⚙️ Admin Paneli")
-    
+
+    # Yalnızca yönetici, maçlara yazma yetkisi olan sunucu anahtarını kullanır.
+    # Bu değerler GitHub'a DEĞİL Streamlit Cloud > Settings > Secrets'a yazılır.
+    try:
+        admin_password = st.secrets.get("ADMIN_PASSWORD")
+        admin_key = st.secrets.get("SUPABASE_ADMIN_KEY")
+    except FileNotFoundError:
+        admin_password, admin_key = None, None
+
+    if not admin_password or not admin_key:
+        st.error("Yönetici ayarları eksik: Streamlit Secrets'a ADMIN_PASSWORD ve SUPABASE_ADMIN_KEY ekleyin.")
+        st.stop()
+
+    entered_password = st.text_input("Yönetici şifresi", type="password")
+    if not hmac.compare_digest(entered_password, str(admin_password)):
+        st.info("Maç eklemek, oranları güncellemek veya sonuç girmek için yönetici şifresini yazın.")
+        st.stop()
+
+    # RLS'yi atlayan anahtar yalnızca Streamlit sunucusunda kalır.
+    admin_supabase = create_client(URL, admin_key)
+
     # SEKME SİSTEMİYLE DAHA DÜZENLİ HALE GETİRDİK
     tab1, tab2, tab3 = st.tabs(["➕ Yeni Maç Ekle", "✏️ Maç Düzenle / Oran Güncelle", "✅ Sonuç Gir"])
 
@@ -161,10 +182,16 @@ elif menu == "⚽ Maç Ekle/Sonuçlandır":
         
         if st.button("Maçı Sisteme Ekle"):
             full_dt = datetime.combine(dt, tm).isoformat()
-            supabase.table("matches").insert({
-                "teams": f"{t1} - {t2}", "odds_g": og, "odds_b": ob, "odds_m": om, "match_time": full_dt
-            }).execute()
-            st.success("Maç başarıyla eklendi!")
+            try:
+                response = admin_supabase.table("matches").insert({
+                    "teams": f"{t1} - {t2}", "odds_g": og, "odds_b": ob, "odds_m": om, "match_time": full_dt
+                }).execute()
+                if not response.data:
+                    raise RuntimeError("Supabase yeni maç kaydını doğrulamadı.")
+                st.success("Maç başarıyla eklendi!")
+            except Exception as e:
+                st.error("Maç eklenemedi. Kayıt yapılmadı; aşağıdaki hatayı kontrol edin.")
+                st.exception(e)
 
     with tab2:
         st.subheader("Mevcut Maçı Güncelle")
@@ -179,23 +206,31 @@ elif menu == "⚽ Maç Ekle/Sonuçlandır":
             st.info(f"Seçili Maç ID: {m_data['id']} | Mevcut Oranlar: G:{m_data['odds_g']} B:{m_data['odds_b']} M:{m_data['odds_m']}")
             
             col1, col2, col3 = st.columns(3)
-            new_og = col1.number_input("Yeni G Oranı", value=float(m_data['odds_g']), key="edit_g")
-            new_ob = col2.number_input("Yeni B Oranı", value=float(m_data['odds_b']), key="edit_b")
-            new_om = col3.number_input("Yeni M Oranı", value=float(m_data['odds_m']), key="edit_m")
-            
-            new_date = st.date_input("Yeni Tarih", value=datetime.fromisoformat(m_data['match_time']).date(), key="edit_date")
-            new_time = st.time_input("Yeni Saat", value=datetime.fromisoformat(m_data['match_time']).time(), key="edit_time")
+            # Widget anahtarları maç ID'sine bağlı: başka maçı seçince eski oranlar taşınmaz.
+            mid = m_data["id"]
+            new_og = col1.number_input("Yeni G Oranı", value=float(m_data['odds_g']), key=f"edit_g_{mid}")
+            new_ob = col2.number_input("Yeni B Oranı", value=float(m_data['odds_b']), key=f"edit_b_{mid}")
+            new_om = col3.number_input("Yeni M Oranı", value=float(m_data['odds_m']), key=f"edit_m_{mid}")
+
+            new_date = st.date_input("Yeni Tarih", value=datetime.fromisoformat(m_data['match_time']).date(), key=f"edit_date_{mid}")
+            new_time = st.time_input("Yeni Saat", value=datetime.fromisoformat(m_data['match_time']).time(), key=f"edit_time_{mid}")
             
             if st.button("Değişiklikleri Kaydet"):
                 new_full_dt = datetime.combine(new_date, new_time).isoformat()
-                supabase.table("matches").update({
-                    "odds_g": new_og, 
-                    "odds_b": new_ob, 
-                    "odds_m": new_om,
-                    "match_time": new_full_dt
-                }).eq("id", m_data['id']).execute()
-                st.success("Maç bilgileri ve oranlar güncellendi!")
-                st.rerun() # Sayfayı yenileyerek güncel bilgileri gösterir
+                try:
+                    response = admin_supabase.table("matches").update({
+                        "odds_g": new_og,
+                        "odds_b": new_ob,
+                        "odds_m": new_om,
+                        "match_time": new_full_dt
+                    }).eq("id", m_data['id']).execute()
+                    if not response.data:
+                        raise RuntimeError("Güncellenecek maç bulunamadı veya güncelleme uygulanmadı.")
+                    st.success("Maç bilgileri ve oranlar güncellendi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Oranlar kaydedilemedi. Supabase'deki değerleri kontrol edin.")
+                    st.exception(e)
         else:
             st.write("Düzenlenecek aktif maç bulunamadı.")
 
@@ -208,8 +243,14 @@ elif menu == "⚽ Maç Ekle/Sonuçlandır":
             res = st.radio("Final Sonucu (90 Dakika)", ["G", "B", "M"], horizontal=True)
             
             if st.button("Sonucu Onayla ve Puanları Kilitle"):
-                supabase.table("matches").update({"result": res}).eq("id", m_list[selected_m]).execute()
-                st.success(f"{selected_m} maçı {res} olarak tescil edildi!")
-                st.rerun()
+                try:
+                    response = admin_supabase.table("matches").update({"result": res}).eq("id", m_list[selected_m]).execute()
+                    if not response.data:
+                        raise RuntimeError("Maç sonucu veritabanına kaydedilemedi.")
+                    st.success(f"{selected_m} maçı {res} olarak tescil edildi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Maç sonucu kaydedilemedi; puan durumu değişmedi.")
+                    st.exception(e)
         else:
             st.write("Bekleyen maç yok.")
